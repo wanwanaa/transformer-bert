@@ -8,7 +8,7 @@ class Config():
         self.filename_test_src = 'DATA/raw_data/test.source'
         self.filename_test_tgt = 'DATA/raw_data/test.target'
 
-        self.filename_trimmed_train = 'DATA/data/valid.pt'
+        self.filename_trimmed_train = 'DATA/data/train.pt'
         self.filename_trimmed_valid = 'DATA/data/valid.pt'
         self.filename_trimmed_test = 'DATA/data/test.pt'
 
@@ -19,7 +19,7 @@ class Config():
         self.src_vocab_size = 523566
         self.tgt_vocab_size = 21128
 
-        self.t_len = 70
+        self.t_len = 90
         self.s_len = 30
 
         self.pad = 0
@@ -27,23 +27,23 @@ class Config():
         self.cls = 101
         self.sep = 102
         self.mask_id = 103
-        self.bos = 104
+        self.bos = 102 # sep
         self.eos = 105
 
         # filename result
         #############################################
-        self.filename_data = 'result/data/'
-        self.filename_model = 'result/model/'
-        self.filename_rouge = 'result/data/ROUGE.txt'
+        self.filename_data = 'result/data/refine/'
+        self.filename_model = 'result/model/refine/'
+        self.filename_rouge = 'result/data/refine/ROUGE.txt'
         #############################################
         self.filename_gold = 'result/gold/gold_summaries.txt'
 
-        self.fine_tune = False
-        self.model_size = 768
-        self.n_head = 12
+        self.fine_tune = True
+        self.model_size = 512
+        self.n_head = 8
         self.d_ff = 2048
         self.warmup_steps = 4000
         self.ls = 0.1
 
-        self.n_layer = 12
-        self.dropout = 0.3
+        self.n_layer = 6
+        self.dropout = 0.1

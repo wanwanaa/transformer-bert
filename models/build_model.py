@@ -2,9 +2,10 @@ from models import *
 from utils import *
 from models.transformer import *
 from models.refine import *
+from models.autoencoder import *
 
 
-def build_model(config):
+def build_refine(config):
     encoder = Encoder(config)
     decoder = Decoder(config)
     bert = Bert(config)
@@ -13,17 +14,27 @@ def build_model(config):
 
 
 # # autoencoder
-# def build_model(config):
+# def build_autoencoder(config):
 #     encoder = Encoder(config)
 #     decoder = Decoder(config)
 #     bert = Bert_AE(config)
 #     decoder_ae = Decoder(config)
-#     model = Refine_model(encoder, decoder, bert, decoder_ae, config)
+#     model = AE(encoder, decoder, bert, decoder_ae, config)
 #     return model
 
 
+# autoencoder
+def build_autoencoder(config):
+    encoder = Encoder(config)
+    decoder = Decoder(config)
+    bert = Bert_AE(config)
+    model = AE(encoder, decoder, bert, config)
+    return model
+
+
 def load_model(config, filename):
-    model = build_model(config)
+    # model = build_autoencoder(config)
+    model = build_refine(config)
     model.load_state_dict(torch.load(filename, map_location='cpu'))
     return model
 

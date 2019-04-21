@@ -29,7 +29,7 @@ class Refine_model(nn.Module):
         return x[:, :-1]
 
     def forward(self, x, y):
-        y = self.convert(y)
+        # y = self.convert(y)
         x_pos = torch.arange(1, self.t_len + 1).repeat(x.size(0), 1)
         y_pos = torch.arange(1, self.s_len + 1).repeat(x.size(0), 1)
         if torch.cuda.is_available():
@@ -39,19 +39,23 @@ class Refine_model(nn.Module):
         y_mask = y.eq(self.pad)
         x_pos = x_pos.masked_fill(x_mask, 0)
         y_pos = y_pos.masked_fill(y_mask, 0)
+        y = self.convert(y)
         # transformer
         enc_output = self.encoder(x, x_pos)
         dec_output = self.decoder(x, y, y_pos, enc_output)
         out = self.linear_out(dec_output)
-        out = torch.nn.funvtional.softmax(out)
+        out = torch.nn.functional.softmax(out)
         out = torch.argmax(out, dim=-1)
 
         # refine
         refine = self.bert(out)
-        refine = self.convert(refine)
+        # refine = self.convert(refine)
         y_pos = torch.arange(1, self.s_len + 1).repeat(x.size(0), 1)
+        if torch.cuda.is_available():
+            y_pos = y_pos.cuda()
         y_mask = refine.eq(self.pad)
         y_pos = y_pos.masked_fill(y_mask, 0)
+        refine = self.convert(refine)
         dec_output = self.decoder(x, refine, y_pos, enc_output)
         final_out = self.linear_out(dec_output)
         return final_out

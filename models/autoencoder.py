@@ -5,16 +5,16 @@ from models.transformer import Decoder
 
 
 class AE(nn.Module):
-    def __init__(self, encoder, decoder, bert, decoder_ae, config):
+    def __init__(self, encoder, decoder, bert, config):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.bert = bert
-        self.decoder_ae = decoder_ae
         self.t_len = config.t_len
         self.s_len = config.s_len
         self.pad = config.pad
         self.bos = config.bos
+        self.linear_bert = nn.Linear(768, config.model_size)
         self.linear_out = nn.Linear(config.model_size, config.tgt_vocab_size)
 
     # add <bos> to sentence
@@ -31,7 +31,7 @@ class AE(nn.Module):
         return x[:, :-1]
 
     def forward(self, x, y):
-        y = self.convert(y)
+        # y = self.convert(y)
         x_pos = torch.arange(1, self.t_len + 1).repeat(x.size(0), 1)
         y_pos = torch.arange(1, self.s_len + 1).repeat(x.size(0), 1)
         if torch.cuda.is_available():
@@ -41,15 +41,22 @@ class AE(nn.Module):
         y_mask = y.eq(self.pad)
         x_pos = x_pos.masked_fill(x_mask, 0)
         y_pos = y_pos.masked_fill(y_mask, 0)
+        y = self.convert(y)
         # transformer
         enc_output = self.encoder(x, x_pos)
         dec_output = self.decoder(x, y, y_pos, enc_output)
         out = self.linear_out(dec_output)
+        out = torch.nn.functional.softmax(out)
         out = torch.argmax(out, dim=-1)
 
+        # print('out:', out.size())
         # bert hidden states
         h = self.bert(out)
-        dec_output = self.decoder_ae(x, y, y_pos, h)
+        h = self.linear_bert(h)
+        # print('h:', h.size())
+        y_mask = out.eq(self.pad)
+        y_pos = y_pos.masked_fill(y_mask, 0)
+        dec_output = self.decoder(x, out, y_pos, enc_output, h)
         final_out = self.linear_out(dec_output)
         return final_out
 
@@ -89,33 +96,13 @@ class AE(nn.Module):
         outs = out[:, 1:]
         # bert autoencoder
         h = self.bert(outs)
-        # <start> connect to decoding input at each step
-        start = torch.ones(x.size(0)) * self.bos
-        start = start.unsqueeze(1)
-        if torch.cuda.is_available():
-            start = start.type(torch.cuda.LongTensor)
-        else:
-            start = start.type(torch.LongTensor)
-        # the first <start>
-        out = torch.ones(x.size(0)) * self.bos
-        out = out.unsqueeze(1)
-        # decoder
-        dec_output = None
-        for i in range(self.s_len):
-            if torch.cuda.is_available():
-                out = out.type(torch.cuda.LongTensor)
-            else:
-                out = out.type(torch.LongTensor)
-            dec_output = self.decoder(outs, out, y_pos[:, :i + 1], h)
-            dec_output = self.linear_out(dec_output)  # (batch, len, vocab_size)
-            gen = torch.nn.functional.softmax(dec_output, -1)
-            gen = torch.argmax(gen, dim=-1)  # (batch, len) eg. 1, 2, 3
-            out = torch.cat((start, gen), dim=1)  # (batch, len+1) eg. <start>, 1, 2, 3
-        return dec_output, out[:, 1:]
+        h = self.linear_bert(h)
 
-
-
-
-
-
-
+        # print('h:', h.size())
+        y_mask = outs.eq(self.pad)
+        y_pos = y_pos.masked_fill(y_mask, 0)
+        dec_output = self.decoder(x, outs, y_pos, enc_output, h)
+        final_out = self.linear_out(dec_output)
+        gen = torch.nn.functional.softmax(final_out, -1)
+        out = torch.argmax(gen, dim=-1)
+        return final_out, out

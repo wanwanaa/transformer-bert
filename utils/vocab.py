@@ -61,8 +61,8 @@ class Vocab():
                 self.word2idx['[UNK]'] = i
             elif i == 104:
                 self.word2idx['<S>'] = i
-            elif i == 105:
-                self.word2idx['<T>'] = i
+            elif i == 102:
+                self.word2idx['[SEP]'] = i
             else:
                 self.word2idx[self.vocab[k][0]] = i
                 k += 1
@@ -78,8 +78,8 @@ class Vocab():
                 self.idx2word.append('[UNK]')
             elif i == 104:
                 self.idx2word.append('<S>')
-            elif i == 105:
-                self.idx2word.append('<T>')
+            elif i == 102:
+                self.idx2word.append('[SEP]')
             else:
                 self.idx2word.append(self.vocab[k][0])
                 k += 1

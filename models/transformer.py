@@ -54,14 +54,14 @@ class Decoder(nn.Module):
         ])
         self.layer_norm = nn.LayerNorm(config.model_size, eps=1e-6)
 
-    def forward(self, x, y, pos, enc_output):
+    def forward(self, x, y, pos, enc_output, dec_output=None):
         no_pad_mask = get_non_pad_mask(y, self.pad)
         attn_mask = get_dec_mask(y)
         pad_mask = get_pad_mask(y, y, self.pad)
         attn_self_mask = (pad_mask + attn_mask).gt(0)
         enc_dec_attn_mask = get_pad_mask(x, y, self.pad)
-
-        dec_output = self.embedding(y) + self.position_dec(pos)
+        if dec_output is None:
+            dec_output = self.embedding(y) + self.position_dec(pos)
         enc_output = self.layer_norm(enc_output)
         for layer in self.decoder_stack:
             dec_output, _, _ = layer(dec_output, enc_output, no_pad_mask, attn_self_mask, enc_dec_attn_mask)

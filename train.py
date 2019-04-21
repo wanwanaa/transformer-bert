@@ -23,15 +23,15 @@ def valid(epoch, config, model, loss_func):
             result, _ = model.sample(x)
         loss = loss_func(result, y)
         all_loss += loss.item()
-        #########################
-        if step == 2:
-            break
-        #########################
+        # #########################
+        # if step == 2:
+        #     break
+        # #########################
     print('epoch:', epoch, '|valid_loss: %.4f' % (all_loss / num))
     return all_loss / num
 
 
-def test(epoch, config, model, loss_func):
+def test(epoch, config, model, loss_func, tokenizer):
     if isinstance(model, torch.nn.DataParallel):
         model = model.module
     model.eval()
@@ -39,7 +39,6 @@ def test(epoch, config, model, loss_func):
     test_loader = data_load(config.filename_trimmed_test, args.batch_size, False)
     all_loss = 0
     num = 0
-    tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
     r = []
     for step, batch in enumerate(tqdm(test_loader)):
         num += 1
@@ -48,18 +47,27 @@ def test(epoch, config, model, loss_func):
             x = x.cuda()
             y = y.cuda()
         with torch.no_grad():
-            result, out = model.sample(x, y)
+            result, out = model.sample(x)
         loss = loss_func(result, y)
         all_loss += loss.item()
 
         out = out.cpu().numpy()
         for i in range(out.shape[0]):
-            sen = tokenizer.convert_ids_to_tokens(list(out[i]))
+            t = []
+            for c in list(out[i]):
+                if c == 102:
+                    break
+                t.append(c)
+            if len(t) == 0:
+                sen = []
+                sen.append('[UNK]')
+            else:
+                sen = tokenizer.convert_ids_to_tokens(t)
             r.append(' '.join(sen))
-        #########################
-        if step == 2:
-            break
-        #########################
+        # #########################
+        # if step == 2:
+        #     break
+        # #########################
 
     print('epoch:', epoch, '|test_loss: %.4f' % (all_loss / num))
 
@@ -85,10 +93,12 @@ def test(epoch, config, model, loss_func):
           ' p: %.4f' % score['rouge-l']['p'],
           ' r: %.4f' % score['rouge-l']['r'])
 
-    return score, all_loss / num
+    return score['rouge-2']['f'], all_loss / num
 
 
 def train(args, config, model):
+    max = 0
+    tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
     optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), eps=1e-9)
     optim = Optim(optimizer, config)
     # KLDivLoss
@@ -114,12 +124,17 @@ def train(args, config, model):
 
             loss = loss_func(out, y)
             all_loss += loss.item()
-            #########################
-            if step == 2:
-                break
-            #########################
+            # #########################
+            # if step == 2:
+            #     break
+            # #########################
             if step % 200 == 0:
                 print('epoch:', e, '|step:', step, '|train_loss: %.4f' % loss.item())
+            # if step != 0 and step % 500 == 0:
+            #     test(e, config, model, loss_func, tokenizer)
+            if step != 0 and step % 5000 == 0:
+                filename = config.filename_model + 'model_' + str(step) + '.pkl'
+                save_model(model, filename)
 
             optim.zero_grad()
             loss.backward()
@@ -129,15 +144,15 @@ def train(args, config, model):
         loss = all_loss / num
         print('epoch:', e, '|train_loss: %.4f' % loss)
 
-        if args.save_model:
-            filename = config.filename_model + 'model_' + str(e) + '.pkl'
-            save_model(model, filename)
-
         # valid
-        valid(e, config, model, loss_func)
+        # valid(e, config, model, loss_func)
 
         # test
-        test(e, config, model, loss_func)
+        score = test(e, config, model, loss_func, tokenizer)
+        if score > max:
+            max = score
+            filename = config.filename_model + 'model.pkl'
+            save_model(model, filename)
 
 
 if __name__ == '__main__':
@@ -152,9 +167,9 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint', '-c', type=int, default=0, help="load model")
     args = parser.parse_args()
 
-    ########test##########
-    args.batch_size = 1
-    ########test##########
+    # ########test##########
+    # args.batch_size = 1
+    # ########test##########
 
     if args.batch_size:
         config.batch_size = args.batch_size
@@ -167,10 +182,11 @@ if __name__ == '__main__':
     # rouge initalization
     open(config.filename_rouge, 'w')
 
-    model = build_model(config)
+    model = build_refine(config)
+    # model = build_autoencoder(config)
     if torch.cuda.is_available():
         model = model.cuda()
-    if isinstance(model, torch.nn.DataParallel):
+    if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
 
     train(args, config, model)

@@ -30,7 +30,7 @@ def get_trimmed_datasets_src(datasets, word2idx, max_length):
         sen = np.zeros(max_length, dtype=np.int32)
         for i in range(max_length):
             if i == len(line):
-                sen[i] = word2idx['<T>']
+                sen[i] = word2idx['[SEP]']
                 # print(sen)
                 break
             else:
@@ -64,7 +64,7 @@ def get_trimmed_datasets_tgt(datasets, tokenizer, max_length, eos):
 
 def save_data(text, summary, word2idx, tokenizer, t_len, s_len, filename):
     text = get_trimmed_datasets_src(text, word2idx, t_len)
-    summary = get_trimmed_datasets_tgt(summary, tokenizer, s_len, 105)
+    summary = get_trimmed_datasets_tgt(summary, tokenizer, s_len, 102)
     data = data_util.TensorDataset(text, summary)
     print('data save at ', filename)
     torch.save(data, filename)
@@ -74,7 +74,7 @@ def save_data(text, summary, word2idx, tokenizer, t_len, s_len, filename):
 def index2sentence(index, idx2word):
     sen = []
     for i in range(len(index)):
-        if idx2word[index[i]] == '<T>':
+        if idx2word[index[i]] == '[SEP]':
             break
         if idx2word[index[i]] == '<S>':
             continue
