@@ -1,7 +1,6 @@
 from utils import *
 from models import *
 import argparse
-import pickle
 from tqdm import tqdm
 
 
@@ -14,19 +13,20 @@ def valid(epoch, config, model, loss_func):
     all_loss = 0
     num = 0
     for step, batch in enumerate(tqdm(valid_loader)):
-        num += 1
+        # num += 1
         x, y = batch
+        num += y.ne(config.pad).sum().item()
         if torch.cuda.is_available():
             x = x.cuda()
             y = y.cuda()
         with torch.no_grad():
-            result, _ = model.sample(x)
-        loss = loss_func(result, y)
+            decoder_out, final_out,  _ = model.sample(x)
+        loss = loss_func(decoder_out, y) + loss_func(final_out, y)
         all_loss += loss.item()
-        # #########################
-        # if step == 2:
-        #     break
-        # #########################
+        #########################
+        if step == 2:
+            break
+        #########################
     print('epoch:', epoch, '|valid_loss: %.4f' % (all_loss / num))
     return all_loss / num
 
@@ -36,19 +36,20 @@ def test(epoch, config, model, loss_func, tokenizer):
         model = model.module
     model.eval()
     # data
-    test_loader = data_load(config.filename_trimmed_test, args.batch_size, False)
+    test_loader = data_load(config.filename_trimmed_test, config.batch_size, False)
     all_loss = 0
     num = 0
     r = []
     for step, batch in enumerate(tqdm(test_loader)):
-        num += 1
+        # num += 1
         x, y = batch
+        num += y.ne(config.pad).sum().item()
         if torch.cuda.is_available():
             x = x.cuda()
             y = y.cuda()
         with torch.no_grad():
-            result, out = model.sample(x)
-        loss = loss_func(result, y)
+            decoder_out, final_out, out = model.sample(x)
+        loss = loss_func(decoder_out, y) + loss_func(final_out, y)
         all_loss += loss.item()
 
         out = out.cpu().numpy()
@@ -64,10 +65,10 @@ def test(epoch, config, model, loss_func, tokenizer):
             else:
                 sen = tokenizer.convert_ids_to_tokens(t)
             r.append(' '.join(sen))
-        # #########################
-        # if step == 2:
-        #     break
-        # #########################
+        #########################
+        if step == 2:
+            break
+        #########################
 
     print('epoch:', epoch, '|test_loss: %.4f' % (all_loss / num))
 
@@ -97,9 +98,9 @@ def test(epoch, config, model, loss_func, tokenizer):
 
 
 def train(args, config, model):
-    max = 0
+    max_sorce = 0.0
     tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), eps=1e-9)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), eps=1e-9)
     optim = Optim(optimizer, config)
     # KLDivLoss
     loss_func = LabelSmoothing(config)
@@ -115,21 +116,44 @@ def train(args, config, model):
         all_loss = 0
         num = 0
         for step, batch in enumerate(tqdm(train_loader)):
-            num += 1
+            # num += 1
             x, y = batch
+            num += y.ne(config.pad).sum().item()
             if torch.cuda.is_available():
                 x = x.cuda()
                 y = y.cuda()
-            out = model(x, y)
+            decout_out, final_out = model(x, y)
 
-            loss = loss_func(out, y)
+            loss = loss_func(decout_out, y) + loss_func(final_out, y)
             all_loss += loss.item()
-            # #########################
-            # if step == 2:
-            #     break
-            # #########################
+            #########################
+            if step == 2:
+                break
+            #########################
             if step % 200 == 0:
-                print('epoch:', e, '|step:', step, '|train_loss: %.4f' % loss.item())
+                # print(final_out[-1].size())
+                decout_out = torch.nn.functional.softmax(decout_out[-1], dim=-1)
+                # print(decout_out.size())
+                decout_out = torch.argmax(decout_out, dim=-1)
+                print(decout_out.size())
+                final_out = torch.nn.functional.softmax(final_out[-1], dim=-1)
+                final_out = torch.argmax(final_out, dim=-1)
+                if torch.cuda.is_available():
+                    decout_out = decout_out.cpu().numpy()
+                    final_out = final_out.cpu().numpy()
+                    y = y[-1].cpu().numpy()
+                else:
+                    decout_out = decout_out.numpy()
+                    final_out = final_out.numpy()
+                    y = y[-1].numpy()
+                # print(decout_out)
+                decout_out = tokenizer.convert_ids_to_tokens(list(decout_out))
+                final_out = tokenizer.convert_ids_to_tokens(list(final_out))
+                y = tokenizer.convert_ids_to_tokens(list(y))
+                print('epoch:', e, '|step:', step, '|train_loss: %.4f' % (loss.item() / num))
+                print(''.join(decout_out))
+                print(''.join(final_out))
+                print(''.join(y))
             # if step != 0 and step % 500 == 0:
             #     test(e, config, model, loss_func, tokenizer)
             if step != 0 and step % 5000 == 0:
@@ -139,7 +163,8 @@ def train(args, config, model):
             optim.zero_grad()
             loss.backward()
             optim.updata()
-
+        # filename = config.filename_model + 'model_' + str(e) + '.pkl'
+        # save_model(model, filename)
         # train loss
         loss = all_loss / num
         print('epoch:', e, '|train_loss: %.4f' % loss)
@@ -148,9 +173,9 @@ def train(args, config, model):
         # valid(e, config, model, loss_func)
 
         # test
-        score = test(e, config, model, loss_func, tokenizer)
-        if score > max:
-            max = score
+        score, _ = test(e, config, model, loss_func, tokenizer)
+        if score > max_sorce:
+            max_sorce = score
             filename = config.filename_model + 'model.pkl'
             save_model(model, filename)
 
@@ -168,7 +193,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # ########test##########
-    # args.batch_size = 1
+    args.batch_size = 1
     # ########test##########
 
     if args.batch_size:
@@ -182,8 +207,8 @@ if __name__ == '__main__':
     # rouge initalization
     open(config.filename_rouge, 'w')
 
-    model = build_refine(config)
-    # model = build_autoencoder(config)
+    # model = build_refine(config)
+    model = build_autoencoder(config)
     if torch.cuda.is_available():
         model = model.cuda()
     if torch.cuda.device_count() > 1:

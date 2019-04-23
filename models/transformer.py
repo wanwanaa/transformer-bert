@@ -30,7 +30,7 @@ class Encoder(nn.Module):
         non_pad_mask = get_non_pad_mask(x, self.pad) # (batch, len, 1)
         attn_mask = get_attn_pad_mask(x, self.pad) # (batch, len, len)
 
-        enc_output = self.embedding(x) + self.position_enc(pos)
+        enc_output = self.embedding(x) * math.sqrt(self.model_size) + self.position_enc(pos)
         enc_output = self.layer_norm(enc_output)
         for layer in self.encoder_stack:
             enc_output, enc_attn = layer(enc_output, non_pad_mask, attn_mask)
@@ -42,6 +42,7 @@ class Decoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.pad = config.pad
+        self.model_size = config.model_size
 
         self.embedding = nn.Embedding(config.tgt_vocab_size, config.model_size)
 
@@ -61,7 +62,7 @@ class Decoder(nn.Module):
         attn_self_mask = (pad_mask + attn_mask).gt(0)
         enc_dec_attn_mask = get_pad_mask(x, y, self.pad)
         if dec_output is None:
-            dec_output = self.embedding(y) + self.position_dec(pos)
+            dec_output = self.embedding(y) * math.sqrt(self.model_size) + self.position_dec(pos)
         enc_output = self.layer_norm(enc_output)
         for layer in self.decoder_stack:
             dec_output, _, _ = layer(dec_output, enc_output, no_pad_mask, attn_self_mask, enc_dec_attn_mask)

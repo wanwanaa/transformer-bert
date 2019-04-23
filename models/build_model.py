@@ -27,14 +27,15 @@ def build_refine(config):
 def build_autoencoder(config):
     encoder = Encoder(config)
     decoder = Decoder(config)
+    decoder_ae = Decoder(config)
     bert = Bert_AE(config)
-    model = AE(encoder, decoder, bert, config)
+    model = AE(encoder, decoder, bert, decoder_ae, config)
     return model
 
 
 def load_model(config, filename):
-    # model = build_autoencoder(config)
-    model = build_refine(config)
+    model = build_autoencoder(config)
+    # model = build_refine(config)
     model.load_state_dict(torch.load(filename, map_location='cpu'))
     return model
 

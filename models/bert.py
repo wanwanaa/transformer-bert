@@ -20,7 +20,7 @@ class Bert(nn.Module):
         return x
 
     def forward(self, x):
-        # x = self.input_Norm(x)
+        x = self.input_Norm(x)
         segments_tensors = torch.zeros_like(x)
         for i in range(self.s_len):
             m = x
@@ -35,8 +35,8 @@ class Bert(nn.Module):
                     predictions = self.model(m, segments_tensors)
             predictions = torch.argmax(predictions[:, i], dim=-1)
             x[:, i] = predictions
-        # return x[:, 1:]
-        return x
+        return x[:, 1:]
+        # return x
 
 
 class Bert_AE(nn.Module):
@@ -57,7 +57,7 @@ class Bert_AE(nn.Module):
 
     def forward(self, x):
         # print('x:', x.size())
-        # x = self.input_Norm(x)
+        x = self.input_Norm(x)
         segments_tensors = torch.zeros_like(x)
         if self.fine_tune:
             h, _ = self.model(x, segments_tensors)
@@ -67,7 +67,5 @@ class Bert_AE(nn.Module):
         # (batch, len, hidden)
         # print(len(h))
         # print(h[-1].size())
-        # return h[-1][:, 1:, :]
-        return h[-1]
-
-
+        return h[-1][:, 1:, :]
+        # return h[-1]
